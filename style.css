@@ -1,0 +1,19 @@
+body {
+	background-color: black;
+}
+
+h1, h2, h3, p, a {
+	color: rgb(0, 255, 0);
+}
+
+p {
+	font-weight: bold;
+}
+
+* {
+	font-family: 'Courier New', Courier, monospace;
+}
+
+.center {
+	text-align: center;
+}
