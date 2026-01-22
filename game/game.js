@@ -3,8 +3,8 @@ const HEIGHT = 600;
 const SCREEN_ZERO = 125;
 const ROOM_WIDTH = 800 - 125;
 const ROOM_HEIGHT = 600;
-const TILE_WIDTH = WIDTH / 15;  // 800 / 15 ≈ 53
-const TILE_HEIGHT = (HEIGHT - 125) / 10; // (600-125)/10 ≈ 47.5
+const TILE_WIDTH = WIDTH / 15;
+const TILE_HEIGHT = (HEIGHT - 125) / 10;
 const canvas = document.getElementById("canvas");
 canvas.width = WIDTH;
 canvas.height = HEIGHT;
@@ -18,16 +18,47 @@ canvas.addEventListener("mousemove", (e) => {
     mouse.y = e.clientY - rect.top;
 });
 
-const keys = {}; // track key states
+const keys = {};
 
+const ENEMY_TYPES = {
+    zombie: {
+        name: "zombie",
+        health: 10,
+        damage: 1,
+        speed: 2.5,
+        size: 32,
+        color: "green",
+        cash: 10,
+        spawnChance: 0.6
+    },
+    skeleton: {
+        name: "skeleton",
+        health: 8,
+        damage: 2,
+        speed: 3.5,
+        size: 28,
+        color: "white",
+        cash: 15,
+        spawnChance: 0.3
+    },
+    slime: {
+        name: "slime",
+        health: 15,
+        damage: 0.5,
+        speed: 1.8,
+        size: 36,
+        color: "blue",
+        cash: 8,
+        spawnChance: 0.1
+    }
+};
 
+const DIFFICULTY = 1;
 
 const mcFont = new FontFace('MC', 'url(mc.otf)');
 mcFont.load().then(function(loadedFont) {
     document.fonts.add(loadedFont);
     console.log("Font loaded!");
-
-    // Start main loop only after font is loaded
     requestAnimationFrame(mainLoop);
 }).catch(err => console.error("Font failed to load:", err));
 
@@ -52,10 +83,10 @@ function makeMarket(start) {
     return {
         price: start,
         history: [start],
-        trend: Math.random() < 0.5 ? -1 : 1,   // -1 down, +1 up
-        trendTime: rand(50, 100),             // how long trend lasts
-        volatility: rand(1, 3),                // roadbumps
-        power: rand(0.3, 0.9)                  // how aggressive
+        trend: Math.random() < 0.5 ? -1 : 1,
+        trendTime: rand(50, 100),
+        volatility: rand(1, 3),
+        power: rand(0.3, 0.9)
     };
 }
 
@@ -63,176 +94,71 @@ function rand(a, b) {
     return Math.random() * (b - a) + a;
 }
 
-
 let marketUI = {
     open: false,
     selected: null
 };
-const shopUpgrades = [
+const DOORS = {
+    up:    { y: 0, x: [6,7,8] },
+    down:  { y: 9, x: [6,7,8] },
+    left:  { x: 0, y: [3,4,5,6] },
+    right: { x: 14, y: [3,4,5,6] }
+};
+
+const ALL_UPGRADES = [
     { id: "hp", label: "+1 HEALTH", cost: 30 },
+    { id: "damage", label: "DAMAGE +", cost: 45 },
     { id: "firerate", label: "FIRE RATE +", cost: 40 },
-    { id: "speed", label: "SPEED +", cost: 25 }
+    { id: "speed", label: "SPEED +", cost: 25 },
+    { id: "health_regen", label: "HEALTH REGEN", cost: 50 },
+    { id: "fire_speed", label: "PROJECTILE SPEED +", cost: 35 },
+    { id: "invuln_time", label: "INVULNERABILITY +", cost: 40 },
+    { id: "crit_chance", label: "CRIT CHANCE +", cost: 60 }
 ];
 
-const roomsPresets = [
-
-    /* NORMAL 1 */
-    {
-        tiles: [
-            [1,1,1,1,1,1,0,0,0,1,1,1,1,1,1],
-            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-            [1,0,1,0,0,0,0,0,0,0,0,0,1,0,1],
-            [0,0,1,0,0,0,0,0,0,0,0,0,1,0,0],
-            [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-            [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-            [1,0,1,0,0,0,0,0,0,0,0,0,1,0,1],
-            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-            [1,1,1,1,1,1,0,0,0,1,1,1,1,1,1],
-        ],
-        type: "not_cleared",
-        enemies: [{ x: 250, y: 420, type: "zombie" }]
-    },
-
-    /* NORMAL 2 */
-    {
-        tiles: [
-            [1,1,1,1,1,1,0,0,0,1,1,1,1,1,1],
-            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-            [1,0,0,1,1,1,0,0,1,1,1,0,0,0,1],
-            [0,0,0,0,1,0,0,0,0,0,1,0,0,0,0],
-            [0,0,0,0,1,0,0,0,0,0,1,0,0,0,0],
-            [0,0,0,0,1,1,1,0,1,1,1,0,0,0,0],
-            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-            [1,1,1,1,1,1,0,0,0,1,1,1,1,1,1],
-        ],
-        type: "not_cleared",
-        enemies: [
-            { x: 200, y: 450, type: "zombie" },
-            { x: 350, y: 450, type: "zombie" }
-        ]
-    },
-
-    /* NORMAL 3 */
-    {
-        tiles: [
-            [1,1,1,1,1,1,0,0,0,1,1,1,1,1,1],
-            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-            [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-            [0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],
-            [0,0,0,0,0,0,1,1,1,0,0,0,0,0,0],
-            [1,0,0,0,0,0,0,1,0,0,0,0,0,0,1],
-            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-            [1,1,1,1,1,1,0,0,0,1,1,1,1,1,1],
-        ],
-        type: "not_cleared",
-        enemies: [{ x: 300, y: 380, type: "zombie" }]
-    },
-
-    /* NORMAL 4 */
-    {
-        tiles: [
-            [1,1,1,1,1,1,0,0,0,1,1,1,1,1,1],
-            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-            [1,0,0,1,1,0,0,0,0,0,1,1,0,0,1],
-            [0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
-            [0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
-            [0,0,0,1,1,0,0,0,0,0,1,1,0,0,0],
-            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-            [1,1,1,1,1,1,0,0,0,1,1,1,1,1,1],
-        ],
-        type: "not_cleared",
-        enemies: [
-            { x: 220, y: 420, type: "zombie" },
-            { x: 380, y: 420, type: "zombie" }
-        ]
-    },
-
-    /* SHOP 1 */
-    {
-        tiles: [
-            [1,1,1,1,1,1,0,0,0,1,1,1,1,1,1],
-            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-            [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-            [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-            [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-            [1,1,1,1,1,1,0,0,0,1,1,1,1,1,1],
-        ],
-        type: "shop",
-        enemies: [],
-        objects: shopUpgrades.map((u, i) => ({
-            type: "upgrade",
-            upgrade: u,
-            x: 200 + i * 150,
-            y: 350,
-            bought: false
-        }))
-    },
-
-    /* SHOP 2 */
-    {
-        tiles: [
-            [1,1,1,1,1,1,0,0,0,1,1,1,1,1,1],
-            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-            [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-            [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-            [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-            [1,1,1,1,1,1,0,0,0,1,1,1,1,1,1],
-        ],
-        type: "shop",
-        enemies: [],
-        objects: shopUpgrades.map((u, i) => ({
-            type: "upgrade",
-            upgrade: u,
-            x: 250 + i * 150,
-            y: 350,
-            bought: false
-        }))
-    }
-
-];
-
-const MAP_SIZE = 20; // 3x3 grid
-let map = Array.from({ length: MAP_SIZE }, () => Array(MAP_SIZE).fill(null));
-
-// Fill map with random rooms from presets
-for (let y = 0; y < MAP_SIZE; y++) {
-    for (let x = 0; x < MAP_SIZE; x++) {
-        const randomRoom = roomsPresets[Math.floor(Math.random() * roomsPresets.length)];
-
-        // deep clone the room
-        const newRoom = {
-            tiles: randomRoom.tiles.map(row => [...row]),
-            type: randomRoom.type,
-            enemies: randomRoom.enemies.map(e => ({ ...e })),
-            objects: randomRoom.objects ? randomRoom.objects.map(o => ({ ...o })) : []
-        };
-
-
-        map[y][x] = newRoom;
-    }
+function getRandomUpgrades(count) {
+    const shuffled = [...ALL_UPGRADES].sort(() => 0.5 - Math.random());
+    return shuffled.slice(0, count);
 }
+
+const roomPresets = [
+    [
+        [1,1,1,1,1,1,0,0,0,1,1,1,1,1,1],
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,0,1,0,0,0,0,0,0,0,0,0,1,0,1],
+        [0,0,1,0,0,0,0,0,0,0,0,0,1,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [1,0,1,0,0,0,0,0,0,0,0,0,1,0,1],
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,1,1,1,1,1,0,0,0,1,1,1,1,1,1],
+    ]
+];
+const shopPresets = [
+    [
+        [1,1,1,1,1,1,0,0,0,1,1,1,1,1,1],
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,1,1,1,1,1,0,0,0,1,1,1,1,1,1],
+    ]
+];
+
 let player = {
     health: 5,
+    maxHealth: 5,
+    damage: 2,
     cash: 0,
     x: WIDTH / 2,
     y: HEIGHT / 2,
     room: [0, 0],
-    fire_rate: 0.5,
+    fire_rate: 5,
     fire_speed: 5,
     speed: 5,
     projectiles: [],
@@ -240,33 +166,165 @@ let player = {
     invincible: false,
     invTimer: 0,
     invDuration: 1000,
-    inventory: [],       // <--- add this
-    message: ""          // <--- for pickup messages
+    inventory: [],
+    message: "",
+    healthRegen: 0,
+    healthRegenTimer: 0,
+    critChance: 0
 };
 const playerImg = new Image();
-const catIndex = Math.floor(Math.random() * 4) + 1; // 1–4
+const catIndex = Math.floor(Math.random() * 4) + 1;
 playerImg.src = `cat${catIndex}.png`;
 
+const MAP_SIZE = 5;
+let map = genMap();
 
+function getRandomEnemyType() {
+    const randValue = Math.random();
+    let cumulative = 0;
+    
+    for (const typeName in ENEMY_TYPES) {
+        const enemyType = ENEMY_TYPES[typeName];
+        cumulative += enemyType.spawnChance;
+        if (randValue <= cumulative) {
+            return enemyType;
+        }
+    }
+    
+    return ENEMY_TYPES.zombie;
+}
+
+function genMap() {
+    console.log("generating map")
+    const map = [];
+
+    function isValidEnemyPosition(x, y, preset, enemySize) {
+        const size = enemySize || 32;
+        if (x < size/2 || x > WIDTH - size/2 || y < SCREEN_ZERO + size/2 || y > HEIGHT - size/2) {
+            return false;
+        }
+        
+        const corners = [
+            {x: x - size/2, y: y - size/2},
+            {x: x + size/2 - 1, y: y - size/2},
+            {x: x - size/2, y: y + size/2 - 1},
+            {x: x + size/2 - 1, y: y + size/2 - 1}
+        ];
+        
+        for (const corner of corners) {
+            const tileX = Math.floor(corner.x / TILE_WIDTH);
+            const tileY = Math.floor((corner.y - SCREEN_ZERO) / TILE_HEIGHT);
+            
+            if (tileY < 0 || tileY >= preset.length || 
+                tileX < 0 || tileX >= preset[0].length) {
+                return false;
+            }
+            
+            if (preset[tileY][tileX] === 1) {
+                return false;
+            }
+        }
+        
+        return true;
+    }
+
+    for (let y = 0; y < MAP_SIZE; y++) {
+        map[y] = [];
+
+        for (let x = 0; x < MAP_SIZE; x++) {
+            const isShop = Math.random() < 0.15;
+            let room;
+
+            if (isShop) {
+                const preset = shopPresets[Math.floor(Math.random() * shopPresets.length)];
+                const shopUpgrades = getRandomUpgrades(3);
+                room = {
+                    tiles: preset.map(r => [...r]),
+                    type: "shop",
+                    enemies: [],
+                    objects: shopUpgrades.map((upgrade, index) => ({
+                        type: "upgrade",
+                        upgrade: upgrade,
+                        x: 200 + index * 200,
+                        y: 200,
+                        bought: false
+                    }))
+                };
+            } else {
+                const preset = roomPresets[Math.floor(Math.random() * roomPresets.length)];
+                const enemyCount = Math.floor(Math.random() * 4) + 1;
+                const enemies = [];
+
+                for (let i = 0; i < enemyCount; i++) {
+                    let attempts = 0;
+                    let foundPosition = false;
+                    const enemyType = getRandomEnemyType();
+                    
+                    while (attempts < 100 && !foundPosition) {
+                        const spawnX = rand(enemyType.size, WIDTH - enemyType.size);
+                        const spawnY = rand(SCREEN_ZERO + enemyType.size, HEIGHT - enemyType.size);
+                        
+                        if (isValidEnemyPosition(spawnX, spawnY, preset, enemyType.size)) {
+                            const offset = (Math.random() - 0.5) * 4;
+                            const baseHealth = enemyType.health;
+                            const enemyHealth = (baseHealth * DIFFICULTY) + offset;
+                            
+                            enemies.push({
+                                type: enemyType.name,
+                                x: spawnX,
+                                y: spawnY,
+                                health: enemyHealth,
+                                maxHealth: enemyHealth,
+                                enemyData: enemyType
+                            });
+                            foundPosition = true;
+                        }
+                        attempts++;
+                    }
+                }
+
+                room = {
+                    tiles: preset.map(r => [...r]),
+                    type: enemies.length ? "uncleared" : "cleared",
+                    enemies,
+                    objects: []
+                };
+            }
+
+            map[y][x] = room;
+        }
+    }
+
+    return map;
+}
 
 function canExit(room, dir) {
-    // dir = "up", "down", "left", "right"
+    if (room.type === "uncleared") return false;
+
     switch(dir) {
         case "up": return room.tiles[0].some(t => t === 0);
-        case "down": return room.tiles[room.tiles.length-1].some(t => t === 0);
-        case "left": return room.tiles.some(row => row[0] === 0);
-        case "right": return room.tiles.some(row => row[row.length-1] === 0);
+        case "down": return room.tiles[9].some(t => t === 0);
+        case "left": return room.tiles.some(r => r[0] === 0);
+        case "right": return room.tiles.some(r => r[14] === 0);
     }
 }
 
 function process() {
-    const curRoom = map[player.room[1]][player.room[0]]; // y,x
+    let curRoom = map[player.room[1]][player.room[0]];
     if (!curRoom) return;
+
+    if (curRoom.type === "uncleared") {
+        setDoors(curRoom, false);
+    }
+
+    if (curRoom.type !== "shop" && curRoom.enemies.length === 0) {
+        curRoom.type = "cleared";
+        setDoors(curRoom, true);
+    }
 
     let newX = player.x;
     let newY = player.y;
 
-    // Player movement
     if (keys["w"]) newY -= player.speed;
     if (keys["s"]) newY += player.speed;
     if (keys["a"]) newX -= player.speed;
@@ -276,45 +334,33 @@ function process() {
     if (Math.random() < 0.02) {
         for (const k in organMarket) {
             const m = organMarket[k];
-
-            // Trend countdown
             m.trendTime--;
-
-            // Flip trend when time runs out
             if (m.trendTime <= 0) {
                 m.trend *= -1;
                 m.trendTime = rand(200, 600);
-                m.power = rand(0.3, 1.2);       // new strength
+                m.power = rand(0.3, 1.2);
                 m.volatility = rand(1, 4);
             }
 
-            // Main directional force
             const trendForce = m.trend * m.power * rand(1, 3);
-
-            // Roadbumps
             const noise = (Math.random() - 0.5) * m.volatility * 2;
-
-            // Big swings, still controlled
             let delta = trendForce + noise;
-
-            // Clamp delta so it feels strong but sane
             delta = Math.max(-8, Math.min(8, delta));
-
-            // Apply
             m.price += delta;
 
-            // Hard clamps per organ
             const min = 5;
-            const max = m.history[0] * 3; // 3x max price
+            const max = m.history[0] * 3;
             m.price = Math.round(Math.max(min, Math.min(max, m.price)));
-
-            // Store history
             m.history.push(m.price);
             if (m.history.length > 50) m.history.shift();
         }
     }
 
-    // Collision
+    if (player.healthRegen > 0 && performance.now() - player.healthRegenTimer > 2000) {
+        player.health = Math.min(player.health + player.healthRegen, player.maxHealth);
+        player.healthRegenTimer = performance.now();
+    }
+
     if (!collidingTile(newX, player.y, curRoom)) player.x = newX;
     if (!collidingTile(player.x, newY, curRoom)) player.y = newY;
 
@@ -323,74 +369,86 @@ function process() {
             const obj = curRoom.objects[i];
 
             if (obj.type === "organ") {
-                // Simple rectangle collision
                 if (player.x + 16 > obj.x && player.x - 16 < obj.x + 20 &&
                     player.y + 16 > obj.y && player.y - 16 < obj.y + 20) {
-
-                    // Pick up the organ
                     player.inventory.push(obj);
                     var audio = new Audio('pickup.wav');
                     audio.play();
                     player.message = "You picked up " + obj.name;
-
-                    // Remove from room
                     curRoom.objects.splice(i, 1);
-
-                    // Clear message after 2 seconds
                     setTimeout(() => { player.message = ""; }, 2000);
                 }
             }
         }
     }
+    
     if (curRoom.type === "shop") {
-    for (const obj of curRoom.objects) {
-        if (obj.type !== "upgrade" || obj.bought) continue;
+        for (const obj of curRoom.objects) {
+            if (obj.type !== "upgrade" || obj.bought) continue;
 
-        if (
-            player.x + 16 > obj.x &&
-            player.x - 16 < obj.x + 40 &&
-            player.y + 16 > obj.y &&
-            player.y - 16 < obj.y + 40
-        ) {
-            player.message = "Press E to buy";
+            if (
+                player.x + 16 > obj.x &&
+                player.x - 16 < obj.x + 40 &&
+                player.y + 16 > obj.y &&
+                player.y - 16 < obj.y + 40
+            ) {
+                player.message = "Press E to buy";
 
-            if (keys["e"] && player.cash >= obj.upgrade.cost) {
-                player.cash -= obj.upgrade.cost;
-                obj.bought = true;
+                if (keys["e"] && player.cash >= obj.upgrade.cost) {
+                    player.cash -= obj.upgrade.cost;
+                    obj.bought = true;
 
-                switch (obj.upgrade.id) {
-                    case "hp": player.health += 1; break;
-                    case "firerate": player.fire_rate += 0.2; break;
-                    case "speed": player.speed += 1; break;
+                    switch (obj.upgrade.id) {
+                        case "hp": 
+                            player.maxHealth += 1;
+                            player.health += 1;
+                            break;
+                        case "damage": 
+                            player.damage += 2; 
+                            break;
+                        case "firerate": 
+                            player.fire_rate += 0.5; 
+                            break;
+                        case "speed": 
+                            player.speed += 1; 
+                            break;
+                        case "health_regen":
+                            player.healthRegen += 1;
+                            break;
+                        case "fire_speed":
+                            player.fire_speed += 1;
+                            break;
+                        case "invuln_time":
+                            player.invDuration += 500;
+                            break;
+                        case "crit_chance":
+                            player.critChance += 0.1;
+                            break;
+                    }
+
+                    player.message = "Bought " + obj.upgrade.label;
                 }
-
-                player.message = "Bought " + obj.upgrade.label;
             }
         }
     }
-}
 
-
-
-    // Room transitions
     if (player.y < SCREEN_ZERO && player.room[1] > 0 && canExit(curRoom, "up")) {
         player.room[1] -= 1;
-        player.y = HEIGHT - TILE_HEIGHT;
+        player.y = HEIGHT - TILE_HEIGHT -32;
     }
     if (player.y > HEIGHT && player.room[1] < MAP_SIZE - 1 && canExit(curRoom, "down")) {
         player.room[1] += 1;
-        player.y = SCREEN_ZERO;
+        player.y = SCREEN_ZERO + TILE_HEIGHT + 32;
     }
     if (player.x < 0 && player.room[0] > 0 && canExit(curRoom, "left")) {
         player.room[0] -= 1;
-        player.x = WIDTH - TILE_WIDTH;
+        player.x = WIDTH - TILE_WIDTH - 32;
     }
     if (player.x > WIDTH && player.room[0] < MAP_SIZE - 1 && canExit(curRoom, "right")) {
         player.room[0] += 1;
-        player.x = TILE_WIDTH;
+        player.x = TILE_WIDTH + 32;
     }
 
-    // Update projectiles
     for (let i = player.projectiles.length - 1; i >= 0; i--) {
         const p = player.projectiles[i];
         p.x += p.vx;
@@ -402,258 +460,233 @@ function process() {
     }
 
     for (let i = curRoom.enemies.length - 1; i >= 0; i--) {
-    let enemy = curRoom.enemies[i];
-
-    // Simple AI
-    enemy.x += (player.x - enemy.x) * 0.01;
-    enemy.y += (player.y - enemy.y) * 0.01;
-
-    // Keep enemy inside room bounds
-    enemy.x = Math.min(Math.max(enemy.x, 0), WIDTH - 32);
-    enemy.y = Math.min(Math.max(enemy.y, SCREEN_ZERO), HEIGHT - 32);
-
-    // Check collision with player
-    if (!player.invincible &&
-        player.x + 16 > enemy.x && player.x - 16 < enemy.x + 32 &&
-        player.y + 16 > enemy.y && player.y - 16 < enemy.y + 32) {
-        
-        player.health -= 1;
-        var audio = new Audio('slap.mp3');
-        audio.play();
-        player.invincible = true;
-        player.invTimer = performance.now();
-    }
-
-    // Check collision with projectiles
-    for (let j = player.projectiles.length - 1; j >= 0; j--) {
-        let p = player.projectiles[j];
-        if (p.x + 10 > enemy.x && p.x < enemy.x + 32 &&
-            p.y + 10 > enemy.y && p.y < enemy.y + 32) {
-
-            // Enemy dies
-            enemyDeath(enemy.type, enemy.x, enemy.y);
-
-            curRoom.enemies.splice(i, 1);
-            player.projectiles.splice(j, 1);
-            break;
-        }
-    }
-    }   
-
-    // Handle invincibility timing
-    if (player.invincible && performance.now() - player.invTimer > player.invDuration) {
-        player.invincible = false;
-    }
-
-    // Update enemies only in current room
-    for (let i = 0; i < curRoom.enemies.length; i++) {
         let enemy = curRoom.enemies[i];
+        const enemyType = ENEMY_TYPES[enemy.type] || ENEMY_TYPES.zombie;
+        const dx = player.x - enemy.x;
+        const dy = player.y - enemy.y;
+        const dist = Math.hypot(dx, dy) || 1;
+        const vx = (dx / dist) * enemyType.speed;
+        const vy = (dy / dist) * enemyType.speed;
 
-        // Simple AI: move toward player
-        enemy.x += (player.x - enemy.x) * 0.01;
-        enemy.y += (player.y - enemy.y) * 0.01;
-
-        // Keep enemy inside room bounds
-        enemy.x = Math.min(Math.max(enemy.x, 0), WIDTH - 32);
-        enemy.y = Math.min(Math.max(enemy.y, SCREEN_ZERO), HEIGHT - 32);
-    }
-}
-
-function draw() {
-    // Clear canvas
-    ctx.fillStyle = "grey";
-    ctx.fillRect(0, 0, WIDTH, HEIGHT);
-
-    // Top bar
-    ctx.fillStyle = "black";
-    ctx.fillRect(0, 0, WIDTH, 125);
-
-    ctx.fillStyle = "white";
-    ctx.font = "20px MC";
-    if (player.health < 3) ctx.fillStyle = "red";
-    ctx.fillText("HEALTH: " + "* ".repeat(player.health), 10, 30);
-    ctx.fillStyle = "white";
-    ctx.fillText("CASH: " + player.cash, 10, 50);
-    if (player.message) ctx.fillText(player.message, 10, 70);
-
-    drawMinimap();
-
-    // Current room
-    const curRoom = map[player.room[1]][player.room[0]];
-    if (!curRoom) return;
-
-    // 1. Draw tiles
-    for (let y = 0; y < curRoom.tiles.length; y++) {
-        for (let x = 0; x < curRoom.tiles[y].length; x++) {
-            ctx.fillStyle = curRoom.tiles[y][x] === 1 ? "#0f0f0f" : "#575757";
-            ctx.fillRect(x * TILE_WIDTH, y * TILE_HEIGHT + 125, TILE_WIDTH + 1, TILE_HEIGHT + 1);
+        let newX = enemy.x + vx;
+        if (!collidingTile(newX, enemy.y, curRoom)) {
+            enemy.x = newX;
         }
-    }
 
-    // Separator line
-    ctx.fillStyle = "white";
-    ctx.fillRect(0, SCREEN_ZERO, WIDTH, 3);
+        let newY = enemy.y + vy;
+        if (!collidingTile(enemy.x, newY, curRoom)) {
+            enemy.y = newY;
+        }
 
-    // 2. Draw objects (organs)
-    for (const object of curRoom.objects) {
-        if (object.type === "organ") {
-            switch (object.name) {
-                case "brain":
-                    ctx.fillStyle = "pink";
-                    ctx.fillRect(object.x, object.y, 20, 20);
-                    break;
-                case "heart":
-                    ctx.fillStyle = "red";
-                    ctx.fillRect(object.x, object.y, 20, 20);
-                    break;
-                case "liver":
-                    ctx.fillStyle = "brown";
-                    ctx.fillRect(object.x, object.y, 20, 20);
-                    break;
-                case "kidney":
-                    ctx.fillStyle = "darkred";
-                    ctx.fillRect(object.x, object.y, 20, 20);
-                    break;
-                case "lung":
-                    ctx.fillStyle = "lightgrey";
-                    ctx.fillRect(object.x, object.y, 10, 20);
-                    ctx.fillRect(object.x + 15, object.y, 10, 20);
-                    break;
-                case "stomach":
-                    ctx.fillStyle = "orange";
-                    ctx.fillRect(object.x, object.y, 20, 10);
-                    break;
-                default:
-                    ctx.fillStyle = "white";
-                    ctx.fillRect(object.x, object.y, 20, 20);
+        const halfSize = enemyType.size / 2;
+        enemy.x = Math.min(Math.max(enemy.x, halfSize), WIDTH - halfSize);
+        enemy.y = Math.min(Math.max(enemy.y, SCREEN_ZERO + halfSize), HEIGHT - halfSize);
+
+        if (!player.invincible &&
+            player.x + 16 > enemy.x - halfSize && player.x - 16 < enemy.x + halfSize &&
+            player.y + 16 > enemy.y - halfSize && player.y - 16 < enemy.y + halfSize) {
+            
+            player.health -= enemyType.damage;
+            var audio = new Audio('slap.mp3');
+            audio.play();
+            player.invincible = true;
+            player.invTimer = performance.now();
+        }
+
+        for (let j = player.projectiles.length - 1; j >= 0; j--) {
+            let p = player.projectiles[j];
+            if (p.x + 10 > enemy.x - halfSize && p.x < enemy.x + halfSize &&
+                p.y + 10 > enemy.y - halfSize && p.y < enemy.y + halfSize) {
+                
+                let damage = player.damage;
+                if (Math.random() < player.critChance) {
+                    damage *= 2;
+                    p.isCrit = true;
+                }
+                
+                enemy.health -= damage;
+                player.projectiles.splice(j, 1);
+                
+                if (enemy.health <= 0) {
+                    enemyDeath(enemy.type, enemy.x, enemy.y);
+                    curRoom.enemies.splice(i, 1);
+                }
+                break;
             }
         }
     }
 
-    // 3. Draw enemies
-    for (const enemy of curRoom.enemies) {
-        ctx.fillStyle = "green";
-        ctx.fillRect(enemy.x, enemy.y, 32, 32);
-    }
-
-if (curRoom.type === "shop") {
-    for (const obj of curRoom.objects) {
-        if (obj.type !== "upgrade") continue;
-
-        ctx.fillStyle = obj.bought ? "#222" : "#444";
-        ctx.fillRect(obj.x, obj.y, 40, 40);
-
-        ctx.fillStyle = "white";
-        ctx.fillText(obj.upgrade.label, obj.x - 20, obj.y - 10);
-        ctx.fillText("$" + obj.upgrade.cost, obj.x + 5, obj.y + 60);
+    if (player.invincible && performance.now() - player.invTimer > player.invDuration) {
+        player.invincible = false;
     }
 }
 
+function draw() {
+    ctx.fillStyle = "grey";
+    ctx.fillRect(0, 0, WIDTH, HEIGHT);
+    ctx.fillStyle = "black";
+    ctx.fillRect(0, 0, WIDTH, 125);
+    ctx.fillStyle = "white";
+    ctx.font = "19px MC";
+    if (player.health < 3) ctx.fillStyle = "red";
+    ctx.fillText("HEALTH: " + player.health + "/" + player.maxHealth, 10, 30);
+    ctx.fillStyle = "white";
+    ctx.fillText("CASH: " + player.cash, 10, 50);
+    ctx.fillText("DAMAGE: " + player.damage, 10, 70);
+    if (player.healthRegen > 0) ctx.fillText("REGEN: " + player.healthRegen, 200, 30);
+    if (player.critChance > 0) ctx.fillText("CRIT: " + Math.round(player.critChance * 100) + "%", 200, 50);
+    if (player.message) ctx.fillText(player.message, 10, 90);
 
-    // 4. Draw player
-    if (!player.invincible || Math.floor(performance.now() / 100) % 2 === 0) {
-        ctx.drawImage(
-            playerImg,
-            player.x - 16,
-            player.y - 16,
-            40,
-            40
-        );
+    drawMinimap();
+    const curRoom = map[player.room[1]][player.room[0]];
+    if (!curRoom) return;
+
+    for (let y = 0; y < curRoom.tiles.length; y++) {
+        for (let x = 0; x < curRoom.tiles[y].length; x++) {
+            switch (curRoom.tiles[y][x]) {
+                case 0:
+                    ctx.fillStyle = "#727272ff"
+                    break
+                case 1:
+                    ctx.fillStyle = "#000000ff"
+                    break
+                case 3:
+                    ctx.fillStyle = "#351500ff"
+                    break
+            }
+            ctx.fillRect(x * TILE_WIDTH, y * TILE_HEIGHT + 125, TILE_WIDTH + 1, TILE_HEIGHT + 1);
+        }
     }
 
-    // 5. Draw projectiles on top
+    ctx.fillStyle = "white";
+    ctx.fillRect(0, SCREEN_ZERO, WIDTH, 3);
+
+    for (const object of curRoom.objects) {
+        if (object.type === "organ") {
+            switch (object.name) {
+                case "brain": ctx.fillStyle = "pink"; break;
+                case "heart": ctx.fillStyle = "red"; break;
+                case "liver": ctx.fillStyle = "brown"; break;
+                case "kidney": ctx.fillStyle = "darkred"; break;
+                case "lung": 
+                    ctx.fillStyle = "lightgrey";
+                    ctx.fillRect(object.x, object.y, 10, 20);
+                    ctx.fillRect(object.x + 15, object.y, 10, 20);
+                    continue;
+                case "stomach": 
+                    ctx.fillStyle = "orange";
+                    ctx.fillRect(object.x, object.y, 20, 10);
+                    continue;
+                default: ctx.fillStyle = "white";
+            }
+            if (object.name !== "lung" && object.name !== "stomach") {
+                ctx.fillRect(object.x, object.y, 20, 20);
+            }
+        }
+    }
+
+    for (const enemy of curRoom.enemies) {
+        const enemyType = ENEMY_TYPES[enemy.type] || ENEMY_TYPES.zombie;
+        const halfSize = enemyType.size / 2;
+        
+        ctx.fillStyle = enemyType.color;
+        ctx.fillRect(enemy.x - halfSize, enemy.y - halfSize, enemyType.size, enemyType.size);
+        
+        const healthPercent = enemy.health / enemy.maxHealth;
+        ctx.fillStyle = "red";
+        ctx.fillRect(enemy.x - halfSize, enemy.y - halfSize - 5, enemyType.size, 3);
+        ctx.fillStyle = "lime";
+        ctx.fillRect(enemy.x - halfSize, enemy.y - halfSize - 5, enemyType.size * healthPercent, 3);
+        
+        ctx.fillStyle = "white";
+        ctx.font = "12px MC";
+        ctx.fillText(enemyType.name.toUpperCase(), enemy.x - halfSize, enemy.y - halfSize - 10);
+    }
+
+    if (curRoom.type === "shop") {
+        for (const obj of curRoom.objects) {
+            if (obj.type !== "upgrade") continue;
+            ctx.fillStyle = obj.bought ? "#222" : "#444";
+            ctx.fillRect(obj.x, obj.y, 40, 40);
+            ctx.fillStyle = "white";
+            ctx.font = "19px MC";
+            ctx.fillText(obj.upgrade.label, obj.x - 20, obj.y - 10);
+            ctx.fillText("$" + obj.upgrade.cost, obj.x + 5, obj.y + 60);
+        }
+    }
+
+    if (!player.invincible || Math.floor(performance.now() / 100) % 2 === 0) {
+        ctx.drawImage(playerImg, player.x - 16, player.y - 16, 40, 40);
+    }
+
     for (const projectile of player.projectiles) {
-        ctx.fillStyle = "#4797ff";
+        ctx.fillStyle = projectile.isCrit ? "gold" : "#4797ff";
         ctx.fillRect(projectile.x, projectile.y, 10, 10);
     }
 
     let i = 0;
     for (const k in organMarket) {
         const count = player.inventory.filter(o => o.name === k).length;
-
         ctx.fillStyle = "#333";
         ctx.fillRect(10 + i * 110, 90, 100, 30);
-
         ctx.fillStyle = "white";
-        ctx.fillText(
-            k.toUpperCase() + " " + count,
-            15 + i * 110,
-            110
-        );
-
+        ctx.fillText(k.toUpperCase() + " " + count, 15 + i * 110, 110);
         i++;
     }
 
-
-
     if (marketUI.open && marketUI.selected) {
         const m = organMarket[marketUI.selected];
-
         ctx.fillStyle = "black";
         ctx.fillRect(80, 150, WIDTH - 160, HEIGHT - 200);
-
-        // GRAPH
         const hx = m.history;
         const baseX = 120;
+        const graphTop = 300;
+        const graphBottom = 500;
+        const graphHeight = graphBottom - graphTop;
+        const min = Math.min(...hx);
+        const max = Math.max(...hx);
+        const range = Math.max(1, max - min);
 
-const graphTop = 200;
-const graphBottom = 420;
-const graphHeight = graphBottom - graphTop;
+        for (let i = 1; i < hx.length; i++) {
+            const prev = hx[i - 1];
+            const curr = hx[i];
+            const x1 = baseX + (i - 1) * 10;
+            const x2 = baseX + i * 10;
+            const y1 = graphBottom - ((prev - min) / range) * graphHeight;
+            const y2 = graphBottom - ((curr - min) / range) * graphHeight;
+            ctx.strokeStyle = curr >= prev ? "green" : "red";
+            ctx.beginPath();
+            ctx.lineWidth = 4;
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.stroke();
+        }
 
-const min = Math.min(...hx);
-const max = Math.max(...hx);
-const range = Math.max(1, max - min);
-
-for (let i = 1; i < hx.length; i++) {
-    const prev = hx[i - 1];
-    const curr = hx[i];
-
-    const x1 = baseX + (i - 1) * 10;
-    const x2 = baseX + i * 10;
-
-    const y1 = graphBottom - ((prev - min) / range) * graphHeight;
-    const y2 = graphBottom - ((curr - min) / range) * graphHeight;
-
-    ctx.strokeStyle = curr >= prev ? "green" : "red";
-    ctx.beginPath();
-    ctx.moveTo(x1, y1);
-    ctx.lineTo(x2, y2);
-    ctx.stroke();
-}
-
-
-
-        // INFO
         const count = player.inventory.filter(o => o.name === marketUI.selected).length;
         ctx.fillStyle = "white";
         ctx.fillText("PRICE: " + m.price, 120, 180);
         ctx.fillText("YOU OWN: " + count, 120, 210);
         ctx.fillText("TOTAL WORTH: " + count * m.price, 120, 240);
-
-        // BUTTONS
         ctx.fillStyle = "#444";
         ctx.fillRect(120, 260, 100, 30);
         ctx.fillRect(240, 260, 100, 30);
-
         ctx.fillStyle = "white";
         ctx.fillText("SELL", 145, 282);
         ctx.fillText("BUY", 270, 282);
     }
-
 }
-
 
 function mainLoop() {
     process();
     draw();
-    requestAnimationFrame(mainLoop); // ~60 FPS
+    requestAnimationFrame(mainLoop);
 }
 
 function shoot() {
-    const now = performance.now(); // current time in ms
-    const cooldown = 1000 / player.fire_rate; // ms between shots
+    const now = performance.now();
+    const cooldown = 1000 / player.fire_rate;
 
-    if (now - player.lastShot < cooldown) return; // still cooling down
+    if (now - player.lastShot < cooldown) return;
     player.lastShot = now;
 
     const dx = mouse.x - player.x;
@@ -666,12 +699,12 @@ function shoot() {
         x: player.x,
         y: player.y,
         vx: (dx / dist) * player.fire_speed,
-        vy: (dy / dist) * player.fire_speed
+        vy: (dy / dist) * player.fire_speed,
+        isCrit: false
     });
 }
 
 function collidingTile(x, y, room) {
-    // Player rectangle (32x32 assumed)
     const left = x - 16;
     const right = x + 16;
     const top = y - 16 - SCREEN_ZERO;
@@ -679,13 +712,12 @@ function collidingTile(x, y, room) {
 
     for (let ty = 0; ty < room.tiles.length; ty++) {
         for (let tx = 0; tx < room.tiles[0].length; tx++) {
-            if (room.tiles[ty][tx] === 1) {
+            if (room.tiles[ty][tx] === 1 || room.tiles[ty][tx] === 3 ) {
                 const tileLeft = tx * TILE_WIDTH;
                 const tileRight = tileLeft + TILE_WIDTH;
                 const tileTop = ty * TILE_HEIGHT;
                 const tileBottom = tileTop + TILE_HEIGHT;
 
-                // Check rectangle collision
                 if (right > tileLeft && left < tileRight &&
                     bottom > tileTop && top < tileBottom) {
                     return true;
@@ -696,8 +728,6 @@ function collidingTile(x, y, room) {
     return false;
 }
 
-
-
 document.addEventListener("keydown", (e) => {
     keys[e.key.toLowerCase()] = true;
 });
@@ -705,18 +735,19 @@ document.addEventListener("keydown", (e) => {
 document.addEventListener("keyup", (e) => {
     keys[e.key.toLowerCase()] = false;
 });
+
 function drawMinimap() {
-    const MINIMAP_SIZE = 100;          // width/height of minimap square
-    const GRID = map.length;           // number of rooms in a row/column
-    const ROOM_SIZE = MINIMAP_SIZE / GRID; // size of each room on minimap
-    const OFFSET_X = WIDTH - MINIMAP_SIZE - 10; // right margin
-    const OFFSET_Y = 10;               // top margin in black bar
+    const MINIMAP_SIZE = 100;
+    const GRID = map.length;
+    const ROOM_SIZE = MINIMAP_SIZE / GRID;
+    const OFFSET_X = WIDTH - MINIMAP_SIZE - 10;
+    const OFFSET_Y = 10;
 
     for (let y = 0; y < GRID; y++) {
         for (let x = 0; x < GRID; x++) {
             let room = map[y][x];
             if (!room) continue;
-            ctx.fillStyle = room.cleared ? "#444" : "#222"; // cleared vs uncleared
+            ctx.fillStyle = room.type === "cleared" ? "#444" : "#222";
             ctx.fillRect(
                 OFFSET_X + x * ROOM_SIZE,
                 OFFSET_Y + y * ROOM_SIZE,
@@ -726,7 +757,6 @@ function drawMinimap() {
         }
     }
 
-    // draw current player room
     ctx.fillStyle = "pink";
     ctx.fillRect(
         OFFSET_X + player.room[0] * ROOM_SIZE,
@@ -740,18 +770,12 @@ function enemyDeath(type, x, y) {
     const curRoom = map[player.room[1]][player.room[0]];
     if (!curRoom) return;
 
-    // Add cash based on enemy type
-    switch (type) {
-        case "zombie":
-            player.cash += 10;
-            break;
-    }
+    const enemyType = ENEMY_TYPES[type] || ENEMY_TYPES.zombie;
+    player.cash += enemyType.cash;
 
-    // Chance to drop 0, 1, or 2 organs
-    const dropCount = Math.floor(Math.random() * 3); // 0, 1, or 2
+    const dropCount = Math.floor(Math.random() * 3);
     for (let i = 0; i < dropCount; i++) {
         const organ = organTypes[Math.floor(Math.random() * organTypes.length)];
-        // Slight random offset so they don't all stack exactly on enemy
         const offsetX = (Math.random() - 0.5) * 20;
         const offsetY = (Math.random() - 0.5) * 20;
 
@@ -787,12 +811,10 @@ canvas.addEventListener("click", e => {
     }
     if (marketUI.open && marketUI.selected) {
         if (x > 120 && x < 220 && y > 260 && y < 290) {
-            // SELL
             const idx = player.inventory.findIndex(o => o.name === marketUI.selected);
             if (idx !== -1) {
                 player.inventory.splice(idx, 1);
                 player.cash += organMarket[marketUI.selected].price;
-                
                 player.message = "Sold " + marketUI.selected;
                 var audio = new Audio('money.mp3');
                 audio.play();
@@ -800,7 +822,6 @@ canvas.addEventListener("click", e => {
         }
 
         if (x > 240 && x < 340 && y > 260 && y < 290) {
-            // BUY
             const price = organMarket[marketUI.selected].price;
             if (player.cash >= price) {
                 var audio = new Audio('buy.mp3');
@@ -811,7 +832,6 @@ canvas.addEventListener("click", e => {
             }
         }
     }
-
 });
 
 document.addEventListener("keydown", e => {
@@ -820,3 +840,21 @@ document.addEventListener("keydown", e => {
         marketUI.selected = null;
     }
 });
+
+function setDoors(room, open) {
+    const v = open ? 0 : 3;
+
+    for (const d in DOORS) {
+        const door = DOORS[d];
+        if (Array.isArray(door.x)) {
+            for (const x of door.x) {
+                room.tiles[door.y][x] = v;
+            }
+        }
+        if (Array.isArray(door.y)) {
+            for (const y of door.y) {
+                room.tiles[y][door.x] = v;
+            }
+        }
+    }
+}
